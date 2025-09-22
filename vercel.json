@@ -1,21 +1,18 @@
 {
   "version": 2,
-  "functions": {
-    "server/index.js": {
-      "maxDuration": 30
-    }
-  },
-  "rewrites": [
+  "builds": [
     {
-      "source": "/api/(.*)",
-      "destination": "/server/index.js"
-    },
-    {
-      "source": "/socket.io/(.*)",
-      "destination": "/server/index.js"
+      "src": "client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
     }
   ],
-  "buildCommand": "cd client && npm install && npm run build",
-  "outputDirectory": "client/build",
-  "installCommand": "npm install && cd server && npm install && cd ../client && npm install"
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/client/build/index.html"
+    }
+  ]
 }
