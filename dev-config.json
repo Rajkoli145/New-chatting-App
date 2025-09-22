@@ -1,0 +1,57 @@
+{
+  "name": "Cross-Lingo Talk Development Configuration",
+  "version": "1.0.0",
+  "ports": {
+    "frontend": 3000,
+    "backend": 5001,
+    "mongodb": 27017
+  },
+  "urls": {
+    "frontend": "http://localhost:3000",
+    "backend": "http://localhost:5001",
+    "api": "http://localhost:5001/api",
+    "health": "http://localhost:5001/api/health"
+  },
+  "database": {
+    "name": "cross-lingo-chat",
+    "local": "mongodb://localhost:27017/cross-lingo-chat",
+    "atlas_template": "mongodb+srv://username:password@cluster.mongodb.net/cross-lingo-chat"
+  },
+  "api_keys_needed": [
+    {
+      "name": "Google Gemini API",
+      "url": "https://makersuite.google.com/app/apikey",
+      "env_var": "GEMINI_API_KEY",
+      "required": true,
+      "description": "For automatic message translation"
+    },
+    {
+      "name": "Twilio (Optional)",
+      "url": "https://console.twilio.com/",
+      "env_vars": ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
+      "required": false,
+      "description": "For real SMS in production (dev mode shows OTP on screen)"
+    }
+  ],
+  "supported_languages": [
+    "en", "hi", "es", "fr", "de", "it", "pt", "ru", 
+    "ja", "ko", "zh", "ar", "bn", "ur", "ta", "te", 
+    "ml", "kn", "gu", "pa", "mr", "or"
+  ],
+  "features": {
+    "phone_auth": true,
+    "otp_verification": true,
+    "real_time_chat": true,
+    "auto_translation": true,
+    "typing_indicators": true,
+    "online_status": true,
+    "message_delivery": true,
+    "pwa_support": true
+  },
+  "development_notes": {
+    "otp_display": "OTP codes are displayed in console and toast notifications in development mode",
+    "translation_fallback": "If Gemini API fails, original text is returned",
+    "socket_reconnection": "Automatic reconnection is enabled for Socket.io",
+    "cors_enabled": "CORS is configured for localhost development"
+  }
+}
