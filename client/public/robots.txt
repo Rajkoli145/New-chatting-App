@@ -1,0 +1,6 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Disallow: /api/
+Allow: /
+
+Sitemap: https://your-domain.vercel.app/sitemap.xml
