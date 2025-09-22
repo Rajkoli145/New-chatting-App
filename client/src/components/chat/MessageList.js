@@ -22,12 +22,13 @@ const MessageList = ({ messages, currentUserId, participant }) => {
           </div>
           <h3 className="text-white font-medium mb-2">Start your conversation</h3>
           <p className="text-dark-400 text-sm mb-4">
-            Send a message to {participant.name} and it will be automatically translated to their preferred language.
+            Send a message to {participant.name} and it will be automatically translated based on each person's preferred language.
           </p>
           <div className="bg-dark-800 rounded-lg p-3 border border-dark-700">
             <p className="text-xs text-dark-400">
-              🌍 Your messages will appear in your language<br/>
-              📱 {participant.name} will see them in {participant.preferredLanguage.toUpperCase()}
+              🌍 You'll see all messages in your preferred language<br/>
+              📱 {participant?.name || 'User'} will see all messages in their preferred language<br/>
+              🔄 Messages are translated automatically based on your language settings
             </p>
           </div>
         </div>
@@ -47,7 +48,7 @@ const MessageList = ({ messages, currentUserId, participant }) => {
         const showAvatar = !isOwn && (!messages[index + 1] || messages[index + 1].sender.id !== message.sender.id);
 
         return (
-          <div key={message.id}>
+          <div key={`${message.id}-${index}`}>
             {/* Date Separator */}
             {showDateSeparator && (
               <div className="flex items-center justify-center my-4">
@@ -73,7 +74,7 @@ const MessageList = ({ messages, currentUserId, participant }) => {
                   ) : (
                     <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
                       <span className="text-white text-xs font-semibold">
-                        {participant.name.charAt(0).toUpperCase()}
+                        {participant?.name?.charAt(0)?.toUpperCase() || '?'}
                       </span>
                     </div>
                   )}
@@ -93,11 +94,11 @@ const MessageList = ({ messages, currentUserId, participant }) => {
                       {message.displayText || message.translatedText || message.originalText}
                     </p>
                     
-                    {/* Translation indicator */}
-                    {message.isTranslated && !isOwn && (
+                    {/* Translation indicator - only show if actually translated and different from original */}
+                    {message.isTranslated && !isOwn && message.translatedText && message.translatedText !== message.originalText && (
                       <div className="flex items-center space-x-1 text-xs text-dark-400">
                         <Globe className="w-3 h-3" />
-                        <span>Translated from {message.senderLanguage.toUpperCase()}</span>
+                        <span>Translated from {message?.senderLanguage?.toUpperCase() || 'Unknown'}</span>
                       </div>
                     )}
                   </div>

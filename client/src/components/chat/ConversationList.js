@@ -10,10 +10,11 @@ const ConversationList = ({ conversations, searchQuery, onConversationSelect }) 
   // Filter conversations based on search query
   const filteredConversations = conversations.filter(conversation => {
     if (!searchQuery.trim()) return true;
+    if (!conversation?.participant) return false;
     
     const query = searchQuery.toLowerCase();
-    const participantName = conversation.participant.name.toLowerCase();
-    const participantPhone = conversation.participant.phone;
+    const participantName = conversation.participant?.name?.toLowerCase() || '';
+    const participantPhone = conversation.participant?.phone || '';
     const lastMessageText = conversation.lastMessage?.text?.toLowerCase() || '';
     
     return participantName.includes(query) || 
@@ -53,6 +54,8 @@ const ConversationList = ({ conversations, searchQuery, onConversationSelect }) 
     <div className="flex-1 overflow-y-auto">
       <div className="space-y-1 p-2">
         {filteredConversations.map((conversation) => {
+          if (!conversation?.participant) return null;
+          
           const isActive = activeConversation?.id === conversation.id;
           const isOnline = isUserOnline(conversation.participant.id);
           const lastSeen = getUserLastSeen(conversation.participant.id);
@@ -74,15 +77,15 @@ const ConversationList = ({ conversations, searchQuery, onConversationSelect }) 
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
                   <div className="w-12 h-12 bg-dark-600 rounded-full flex items-center justify-center">
-                    {conversation.participant.avatar ? (
+                    {conversation.participant?.avatar ? (
                       <img 
                         src={conversation.participant.avatar} 
-                        alt={conversation.participant.name}
+                        alt={conversation.participant?.name || 'User'}
                         className="w-12 h-12 rounded-full object-cover"
                       />
                     ) : (
                       <span className="text-white font-semibold text-lg">
-                        {conversation.participant.name.charAt(0).toUpperCase()}
+                        {conversation.participant?.name?.charAt(0)?.toUpperCase() || '?'}
                       </span>
                     )}
                   </div>
@@ -98,7 +101,7 @@ const ConversationList = ({ conversations, searchQuery, onConversationSelect }) 
                     <h3 className={`font-medium truncate ${
                       isActive ? 'text-white' : 'text-white'
                     }`}>
-                      {conversation.participant.name}
+                      {conversation.participant?.name || 'Unknown User'}
                     </h3>
                     <div className="flex items-center space-x-2">
                       {conversation.lastMessage && (
@@ -137,7 +140,7 @@ const ConversationList = ({ conversations, searchQuery, onConversationSelect }) 
                         ? 'bg-primary-700 text-primary-200' 
                         : 'bg-dark-600 text-dark-300'
                     }`}>
-                      {conversation.participant.preferredLanguage.toUpperCase()}
+                      {conversation.participant?.preferredLanguage?.toUpperCase() || 'EN'}
                     </div>
                   </div>
 

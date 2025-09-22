@@ -52,30 +52,57 @@ router.get('/conversation/:conversationId', auth, [
       }
     );
 
+    // Translate messages for the current user's preferred language
+    const userLanguage = req.user.preferredLanguage;
+    const translatedMessages = await Promise.all(
+      messages.map(async (message) => {
+        let displayText = message.originalText;
+        let isTranslated = false;
+
+        // Translate if message sender's language is different from current user's language
+        if (message.senderLanguage !== userLanguage) {
+          try {
+            displayText = await translationService.translateText(
+              message.originalText,
+              message.senderLanguage,
+              userLanguage
+            );
+            // Only mark as translated if the text actually changed
+            isTranslated = displayText !== message.originalText;
+          } catch (translationError) {
+            console.error('Translation failed for message:', message._id, translationError);
+            displayText = message.originalText; // Fallback to original
+          }
+        }
+
+        return {
+          id: message._id,
+          conversationId: message.conversationId,
+          sender: {
+            id: message.sender._id,
+            name: message.sender.name,
+            phone: message.sender.phone,
+            avatar: message.sender.avatar
+          },
+          originalText: message.originalText,
+          translatedText: isTranslated ? displayText : null,
+          displayText: displayText,
+          senderLanguage: message.senderLanguage,
+          recipientLanguage: userLanguage,
+          messageType: message.messageType,
+          isRead: message.isRead,
+          readAt: message.readAt,
+          isDelivered: message.isDelivered,
+          deliveredAt: message.deliveredAt,
+          isTranslated: isTranslated,
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt
+        };
+      })
+    );
+
     res.json({
-      messages: messages.map(message => ({
-        id: message._id,
-        conversationId: message.conversationId,
-        sender: {
-          id: message.sender._id,
-          name: message.sender.name,
-          phone: message.sender.phone,
-          avatar: message.sender.avatar
-        },
-        originalText: message.originalText,
-        translatedText: message.translatedText,
-        displayText: message.displayText,
-        senderLanguage: message.senderLanguage,
-        recipientLanguage: message.recipientLanguage,
-        messageType: message.messageType,
-        isRead: message.isRead,
-        readAt: message.readAt,
-        isDelivered: message.isDelivered,
-        deliveredAt: message.deliveredAt,
-        isTranslated: message.isTranslated,
-        createdAt: message.createdAt,
-        updatedAt: message.updatedAt
-      })),
+      messages: translatedMessages,
       pagination: {
         page,
         limit,

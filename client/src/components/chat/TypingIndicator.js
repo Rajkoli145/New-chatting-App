@@ -19,7 +19,7 @@ const TypingIndicator = ({ users }) => {
     <div className="flex items-center space-x-3 fade-in">
       <div className="w-8 h-8 bg-dark-700 rounded-full flex items-center justify-center">
         <span className="text-white text-xs font-semibold">
-          {users[0].userName.charAt(0).toUpperCase()}
+          {users[0]?.userName?.charAt(0)?.toUpperCase() || '?'}
         </span>
       </div>
       

@@ -2,8 +2,10 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 class TranslationService {
   constructor() {
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+    this.isAvailable = !!process.env.GEMINI_API_KEY;
+    this.requestCount = 0;
+    this.lastResetTime = Date.now();
+    this.maxRequestsPerMinute = 12; // Stay under the 15/minute limit
     
     // Language code mappings
     this.languageNames = {
@@ -30,6 +32,33 @@ class TranslationService {
       'mr': 'Marathi',
       'or': 'Odia'
     };
+    
+    if (this.isAvailable) {
+      try {
+        this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        console.log('✅ Gemini AI translation service initialized');
+      } catch (error) {
+        console.error('Failed to initialize Gemini AI:', error);
+        this.isAvailable = false;
+      }
+    } else {
+      console.warn('⚠️ Gemini API key not found. Translation service will be disabled.');
+    }
+  }
+
+  // Check if we can make a request without hitting rate limits
+  canMakeRequest() {
+    const now = Date.now();
+    const timeSinceReset = now - this.lastResetTime;
+    
+    // Reset counter every minute
+    if (timeSinceReset >= 60000) {
+      this.requestCount = 0;
+      this.lastResetTime = now;
+    }
+    
+    return this.requestCount < this.maxRequestsPerMinute;
   }
 
   async translateText(text, fromLanguage, toLanguage) {
@@ -37,6 +66,18 @@ class TranslationService {
       // If languages are the same, return original text
       if (fromLanguage === toLanguage) {
         return text;
+      }
+
+      // If translation service is not available, return original text
+      if (!this.isAvailable) {
+        console.log('Translation service not available, returning original text');
+        return text;
+      }
+
+      // Check rate limit before making request
+      if (!this.canMakeRequest()) {
+        console.log('⚠️ Rate limit reached, returning original text');
+        return text; // Return original text instead of fallback
       }
 
       const fromLangName = this.languageNames[fromLanguage] || fromLanguage;
@@ -47,9 +88,14 @@ class TranslationService {
       
       Text to translate: "${text}"`;
 
+      // Increment request counter
+      this.requestCount++;
+      
       const result = await this.model.generateContent(prompt);
       const response = await result.response;
       const translatedText = response.text().trim();
+
+      console.log(`✅ Translation successful (${this.requestCount}/${this.maxRequestsPerMinute}): "${text}" → "${translatedText}"`);
 
       // Remove quotes if they were added
       return translatedText.replace(/^["']|["']$/g, '');
@@ -57,9 +103,55 @@ class TranslationService {
     } catch (error) {
       console.error('Translation error:', error);
       
+      // Check if it's a quota error
+      if (error.message && error.message.includes('Quota exceeded')) {
+        console.log('⚠️ Translation quota exceeded, returning original text');
+        return text; // Return original text instead of fallback
+      }
+      
       // Fallback: return original text if translation fails
       return text;
     }
+  }
+
+  // Simple fallback translation for common phrases
+  getSimpleFallbackTranslation(text, fromLanguage, toLanguage) {
+    const translations = {
+      'en_to_hi': {
+        'hello': 'नमस्ते',
+        'hi': 'नमस्ते', 
+        'how are you': 'आप कैसे हैं',
+        'good morning': 'सुप्रभात',
+        'good night': 'शुभ रात्रि',
+        'thank you': 'धन्यवाद',
+        'yes': 'हाँ',
+        'no': 'नहीं'
+      },
+      'hi_to_en': {
+        'नमस्ते': 'hello',
+        'आप कैसे हैं': 'how are you',
+        'सुप्रभात': 'good morning',
+        'शुभ रात्रि': 'good night',
+        'धन्यवाद': 'thank you',
+        'हाँ': 'yes',
+        'नहीं': 'no'
+      }
+    };
+
+    const translationKey = `${fromLanguage}_to_${toLanguage}`;
+    const translationMap = translations[translationKey];
+    
+    if (translationMap) {
+      const lowerText = text.toLowerCase();
+      for (const [original, translated] of Object.entries(translationMap)) {
+        if (lowerText.includes(original.toLowerCase())) {
+          return text.replace(new RegExp(original, 'gi'), translated);
+        }
+      }
+    }
+
+    // If no simple translation found, return original text silently
+    return text;
   }
 
   async detectLanguage(text) {

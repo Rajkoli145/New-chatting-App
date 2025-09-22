@@ -26,7 +26,7 @@ const messageSchema = new mongoose.Schema({
   },
   recipientLanguage: {
     type: String,
-    required: true
+    required: false
   },
   messageType: {
     type: String,

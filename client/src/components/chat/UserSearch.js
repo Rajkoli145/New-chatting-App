@@ -64,7 +64,7 @@ const UserSearch = ({ users, searchQuery, onUserSelect }) => {
                       />
                     ) : (
                       <span className="text-white font-semibold text-lg">
-                        {user.name.charAt(0).toUpperCase()}
+                        {user?.name?.charAt(0)?.toUpperCase() || '?'}
                       </span>
                     )}
                   </div>
@@ -83,7 +83,7 @@ const UserSearch = ({ users, searchQuery, onUserSelect }) => {
                     <div className="flex items-center space-x-2">
                       {/* Language indicator */}
                       <div className="px-2 py-0.5 bg-dark-600 text-dark-300 rounded text-xs font-medium">
-                        {user.preferredLanguage.toUpperCase()}
+                        {user?.preferredLanguage?.toUpperCase() || 'EN'}
                       </div>
                       {/* Online status indicator */}
                       <div className={`w-2 h-2 rounded-full ${

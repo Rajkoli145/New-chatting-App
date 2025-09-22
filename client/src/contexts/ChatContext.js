@@ -26,6 +26,75 @@ export const ChatProvider = ({ children }) => {
   const { socket, isConnected, joinConversation } = useSocket();
   const { user, isAuthenticated } = useAuth();
 
+  // Handle new message (from socket or API)
+  const handleNewMessage = useCallback((messageData) => {
+    const conversationId = messageData.conversationId;
+
+    // Add message to messages map (check for duplicates)
+    setMessages(prev => {
+      const updated = new Map(prev);
+      const existing = updated.get(conversationId) || [];
+      
+      // Check if message already exists
+      const messageExists = existing.some(msg => msg.id === messageData.id);
+      if (messageExists) {
+        console.log('Message already exists, skipping:', messageData.id);
+        return prev; // Return previous state unchanged
+      }
+      
+      updated.set(conversationId, [...existing, messageData]);
+      return updated;
+    });
+
+    // Update conversation list
+    setConversations(prev => {
+      const updated = [...prev];
+      const conversationIndex = updated.findIndex(c => c.id === conversationId);
+      
+      if (conversationIndex >= 0) {
+        // Update existing conversation
+        updated[conversationIndex] = {
+          ...updated[conversationIndex],
+          lastMessage: {
+            id: messageData.id,
+            text: messageData.displayText,
+            sender: messageData.sender.id,
+            createdAt: messageData.createdAt,
+            isRead: messageData.sender.id === user?.id
+          },
+          lastMessageTime: messageData.createdAt
+        };
+        
+        // Move to top
+        const conversation = updated.splice(conversationIndex, 1)[0];
+        updated.unshift(conversation);
+      } else {
+        // Create new conversation entry (this shouldn't happen often)
+        const newConversation = {
+          id: conversationId,
+          participant: messageData.sender,
+          lastMessage: {
+            id: messageData.id,
+            text: messageData.displayText,
+            sender: messageData.sender.id,
+            createdAt: messageData.createdAt,
+            isRead: messageData.sender.id === user?.id
+          },
+          lastMessageTime: messageData.createdAt,
+          createdAt: messageData.createdAt
+        };
+        updated.unshift(newConversation);
+      }
+      
+      return updated;
+    });
+
+    // Update unread count if message is not from current user
+    if (messageData.sender.id !== user?.id) {
+      setUnreadCount(prev => prev + 1);
+    }
+  }, [user?.id, activeConversation?.id]);
+
   // Load initial data
   useEffect(() => {
     if (isAuthenticated) {
@@ -39,31 +108,34 @@ export const ChatProvider = ({ children }) => {
   useEffect(() => {
     if (socket && isConnected) {
       // New message received
-      socket.on('new-message', (messageData) => {
+      const handleNewMessageEvent = (messageData) => {
         handleNewMessage(messageData);
-      });
+      };
 
       // Message sent confirmation
-      socket.on('message-sent', (data) => {
-        // Update message status
+      const handleMessageSentEvent = (data) => {
         updateMessageStatus(data.id, { 
           isDelivered: true, 
           deliveredAt: data.deliveredAt 
         });
-      });
+      };
 
       // Messages read receipt
-      socket.on('messages-read', (data) => {
+      const handleMessagesReadEvent = (data) => {
         markConversationMessagesAsRead(data.conversationId, data.readBy);
-      });
+      };
+
+      socket.on('new-message', handleNewMessageEvent);
+      socket.on('message-sent', handleMessageSentEvent);
+      socket.on('messages-read', handleMessagesReadEvent);
 
       return () => {
-        socket.off('new-message');
-        socket.off('message-sent');
-        socket.off('messages-read');
+        socket.off('new-message', handleNewMessageEvent);
+        socket.off('message-sent', handleMessageSentEvent);
+        socket.off('messages-read', handleMessagesReadEvent);
       };
     }
-  }, [socket, isConnected]);
+  }, [socket, isConnected, handleNewMessage]);
 
   // Load conversations
   const loadConversations = async () => {
@@ -73,7 +145,7 @@ export const ChatProvider = ({ children }) => {
       setConversations(response.data.conversations);
     } catch (error) {
       console.error('Failed to load conversations:', error);
-      toast.error('Failed to load conversations');
+      // Remove toast notification for loading errors
     } finally {
       setLoading(false);
     }
@@ -86,7 +158,7 @@ export const ChatProvider = ({ children }) => {
       setUsers(response.data.users);
     } catch (error) {
       console.error('Failed to load users:', error);
-      toast.error('Failed to load users');
+      // Remove toast notification for loading errors
     }
   };
 
@@ -165,76 +237,10 @@ export const ChatProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error('Failed to send message:', error);
-      toast.error('Failed to send message');
+      // Remove toast notification for send errors
       return false;
     }
   };
-
-  // Handle new message (from socket or API)
-  const handleNewMessage = useCallback((messageData) => {
-    const conversationId = messageData.conversationId;
-
-    // Add message to messages map
-    setMessages(prev => {
-      const updated = new Map(prev);
-      const existing = updated.get(conversationId) || [];
-      updated.set(conversationId, [...existing, messageData]);
-      return updated;
-    });
-
-    // Update conversation list
-    setConversations(prev => {
-      const updated = [...prev];
-      const conversationIndex = updated.findIndex(c => c.id === conversationId);
-      
-      if (conversationIndex >= 0) {
-        // Update existing conversation
-        updated[conversationIndex] = {
-          ...updated[conversationIndex],
-          lastMessage: {
-            id: messageData.id,
-            text: messageData.displayText,
-            sender: messageData.sender.id,
-            createdAt: messageData.createdAt,
-            isRead: messageData.sender.id === user?.id
-          },
-          lastMessageTime: messageData.createdAt
-        };
-        
-        // Move to top
-        const conversation = updated.splice(conversationIndex, 1)[0];
-        updated.unshift(conversation);
-      } else {
-        // Create new conversation entry (this shouldn't happen often)
-        const newConversation = {
-          id: conversationId,
-          participant: messageData.sender,
-          lastMessage: {
-            id: messageData.id,
-            text: messageData.displayText,
-            sender: messageData.sender.id,
-            createdAt: messageData.createdAt,
-            isRead: messageData.sender.id === user?.id
-          },
-          lastMessageTime: messageData.createdAt,
-          createdAt: messageData.createdAt
-        };
-        updated.unshift(newConversation);
-      }
-      
-      return updated;
-    });
-
-    // Update unread count if message is not from current user
-    if (messageData.sender.id !== user?.id) {
-      setUnreadCount(prev => prev + 1);
-      
-      // Show notification if not in active conversation
-      if (activeConversation?.id !== conversationId) {
-        toast.success(`New message from ${messageData.sender.name}`);
-      }
-    }
-  }, [user?.id, activeConversation?.id]);
 
   // Update message status
   const updateMessageStatus = (messageId, updates) => {

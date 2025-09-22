@@ -34,19 +34,24 @@ export const SocketProvider = ({ children }) => {
       newSocket.on('connect', () => {
         console.log('🔌 Connected to server');
         setIsConnected(true);
-        toast.success('Connected to chat server');
+        // Remove toast notification for connection
+        
+        // Request current online users with a small delay to ensure server is ready
+        setTimeout(() => {
+          newSocket.emit('get-online-users');
+        }, 1000);
       });
 
       newSocket.on('disconnect', () => {
         console.log('🔌 Disconnected from server');
         setIsConnected(false);
-        toast.error('Disconnected from chat server');
+        // Only show disconnect toast if it was unexpected
       });
 
       newSocket.on('connect_error', (error) => {
         console.error('Socket connection error:', error);
         setIsConnected(false);
-        toast.error('Failed to connect to chat server');
+        // Remove toast notification for connection errors
       });
 
       // User status event handlers
@@ -73,6 +78,18 @@ export const SocketProvider = ({ children }) => {
         });
       });
 
+      // Handle online users list
+      newSocket.on('online-users-list', (users) => {
+        const usersMap = new Map();
+        users.forEach(user => {
+          usersMap.set(user.userId, {
+            ...user,
+            isOnline: true
+          });
+        });
+        setOnlineUsers(usersMap);
+      });
+
       // Typing indicators
       newSocket.on('user-typing', (data) => {
         const { conversationId, userId, userName, isTyping } = data;
@@ -92,7 +109,7 @@ export const SocketProvider = ({ children }) => {
       // Error handling
       newSocket.on('error', (error) => {
         console.error('Socket error:', error);
-        toast.error(error.message || 'Socket error occurred');
+        // Remove toast notification for socket errors
       });
 
       setSocket(newSocket);

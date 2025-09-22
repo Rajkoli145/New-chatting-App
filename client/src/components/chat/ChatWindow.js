@@ -111,7 +111,7 @@ const ChatWindow = ({ onBackClick, showBackButton = false }) => {
                 />
               ) : (
                 <span className="text-white font-semibold">
-                  {activeConversation.participant.name.charAt(0).toUpperCase()}
+                  {activeConversation.participant?.name?.charAt(0)?.toUpperCase() || '?'}
                 </span>
               )}
             </div>
@@ -130,7 +130,7 @@ const ChatWindow = ({ onBackClick, showBackButton = false }) => {
               </span>
               <span className="text-xs text-dark-500">•</span>
               <span className="text-xs text-dark-500">
-                Speaks {activeConversation.participant.preferredLanguage.toUpperCase()}
+                Speaks {activeConversation.participant?.preferredLanguage?.toUpperCase() || 'EN'}
               </span>
             </div>
           </div>
@@ -207,7 +207,7 @@ const ChatWindow = ({ onBackClick, showBackButton = false }) => {
 
         {/* Translation Notice */}
         <div className="mt-2 text-xs text-dark-500 text-center">
-          Messages are automatically translated to {activeConversation.participant.preferredLanguage.toUpperCase()}
+          Messages are automatically translated based on each person's preferred language
         </div>
       </div>
     </div>

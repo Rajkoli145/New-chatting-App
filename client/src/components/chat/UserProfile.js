@@ -66,7 +66,7 @@ const UserProfile = ({ user, onClose }) => {
 
   const getLanguageName = (code) => {
     const lang = SUPPORTED_LANGUAGES.find(l => l.code === code);
-    return lang ? lang.name : code.toUpperCase();
+    return lang ? lang.name : (code?.toUpperCase() || 'Unknown');
   };
 
   return (

@@ -21,7 +21,13 @@ function App() {
       <AuthProvider>
         <SocketProvider>
           <ChatProvider>
-            <Router>
+            <Router
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true
+              }}
+            >
+                
               <Routes>
                 {/* Public Routes */}
                 <Route path="/login" element={<Login />} />
@@ -29,7 +35,9 @@ function App() {
                 <Route path="/verify-otp" element={<OTPVerification />} />
                 
                 {/* Protected Routes */}
+                
                 <Route path="/chat" element={
+                    
                   <AuthGuard>
                     <Chat />
                   </AuthGuard>

@@ -64,7 +64,29 @@ const socketHandler = (io) => {
       socket.broadcast.emit('user-online', {
         userId: socket.userId,
         name: socket.user.name,
-        isOnline: true
+        isOnline: true,
+        lastSeen: new Date()
+      });
+
+      // Also send to all conversation rooms this user is part of
+      conversations.forEach(conversation => {
+        socket.to(`conversation_${conversation._id}`).emit('user-online', {
+          userId: socket.userId,
+          name: socket.user.name,
+          isOnline: true,
+          lastSeen: new Date()
+        });
+      });
+
+      // Handle request for online users list
+      socket.on('get-online-users', () => {
+        const onlineUsersList = Array.from(activeUsers.values()).map(userData => ({
+          userId: userData.user._id.toString(),
+          name: userData.user.name,
+          isOnline: true,
+          lastSeen: userData.lastSeen
+        }));
+        socket.emit('online-users-list', onlineUsersList);
       });
 
       // Handle joining a conversation
@@ -116,33 +138,16 @@ const socketHandler = (io) => {
           const senderLanguage = socket.user.preferredLanguage;
           const recipientLanguage = recipient.preferredLanguage;
 
-          // Translate message if needed
-          let translatedText = text;
-          let isTranslated = false;
-          
-          if (senderLanguage !== recipientLanguage) {
-            try {
-              translatedText = await translationService.translateText(
-                text, 
-                senderLanguage, 
-                recipientLanguage
-              );
-              isTranslated = true;
-            } catch (translationError) {
-              console.error('Translation failed:', translationError);
-            }
-          }
-
-          // Create message
+          // Create message with original text (no translation stored in DB)
           const message = new Message({
             conversationId: conversation._id,
             sender: socket.userId,
             originalText: text,
-            translatedText,
+            translatedText: null, // We'll translate on-demand for each user
             senderLanguage,
-            recipientLanguage,
+            recipientLanguage: null, // Not storing specific recipient language
             messageType,
-            isTranslated,
+            isTranslated: false, // Will be determined per user
             isDelivered: true,
             deliveredAt: new Date()
           });
@@ -155,32 +160,60 @@ const socketHandler = (io) => {
           conversation.lastMessageTime = new Date();
           await conversation.save();
 
-          const messageData = {
-            id: message._id,
-            conversationId: message.conversationId,
-            sender: {
-              id: message.sender._id,
-              name: message.sender.name,
-              phone: message.sender.phone,
-              avatar: message.sender.avatar
-            },
-            originalText: message.originalText,
-            translatedText: message.translatedText,
-            displayText: message.translatedText || message.originalText,
-            senderLanguage: message.senderLanguage,
-            recipientLanguage: message.recipientLanguage,
-            messageType: message.messageType,
-            isTranslated: message.isTranslated,
-            isDelivered: message.isDelivered,
-            deliveredAt: message.deliveredAt,
-            createdAt: message.createdAt
-          };
+          // Get all participants in the conversation
+          const participants = await User.find({ 
+            _id: { $in: conversation.participants } 
+          }).select('_id preferredLanguage');
 
-          // Send to conversation room
-          io.to(`conversation_${conversation._id}`).emit('new-message', messageData);
+          // Send personalized message to each participant
+          for (const participant of participants) {
+            const participantLanguage = participant.preferredLanguage;
+            let displayText = text;
+            let isTranslated = false;
 
-          // Send to recipient's personal room (in case they're not in conversation room)
-          io.to(`user_${recipientId}`).emit('new-message', messageData);
+            // Translate if participant's language is different from sender's language
+            if (senderLanguage !== participantLanguage) {
+              try {
+                displayText = await translationService.translateText(
+                  text, 
+                  senderLanguage, 
+                  participantLanguage
+                );
+                // Only mark as translated if the text actually changed
+                isTranslated = displayText !== text;
+                if (isTranslated) {
+                  console.log(`Translated message for ${participant._id}: "${text}" -> "${displayText}"`);
+                }
+              } catch (translationError) {
+                console.error('Translation failed:', translationError);
+                displayText = text; // Fallback to original text
+              }
+            }
+
+            const personalizedMessageData = {
+              id: message._id,
+              conversationId: message.conversationId,
+              sender: {
+                id: message.sender._id,
+                name: message.sender.name,
+                phone: message.sender.phone,
+                avatar: message.sender.avatar
+              },
+              originalText: message.originalText,
+              translatedText: isTranslated ? displayText : null,
+              displayText: displayText,
+              senderLanguage: message.senderLanguage,
+              recipientLanguage: participantLanguage,
+              messageType: message.messageType,
+              isTranslated: isTranslated,
+              isDelivered: message.isDelivered,
+              deliveredAt: message.deliveredAt,
+              createdAt: message.createdAt
+            };
+
+            // Send to participant's personal room
+            io.to(`user_${participant._id}`).emit('new-message', personalizedMessageData);
+          }
 
           // Confirm to sender
           socket.emit('message-sent', {
@@ -310,11 +343,22 @@ const socketHandler = (io) => {
           }
 
           // Notify other users that this user is offline
-          socket.broadcast.emit('user-offline', {
+          const offlineData = {
             userId: socket.userId,
             name: socket.user.name,
             isOnline: false,
             lastSeen: new Date()
+          };
+          
+          socket.broadcast.emit('user-offline', offlineData);
+          
+          // Also notify all conversation rooms
+          const userConversations = await Conversation.find({ 
+            participants: socket.userId 
+          });
+          
+          userConversations.forEach(conversation => {
+            socket.to(`conversation_${conversation._id}`).emit('user-offline', offlineData);
           });
 
         } catch (error) {
