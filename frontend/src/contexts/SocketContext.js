@@ -111,6 +111,11 @@ export const SocketProvider = ({ children }) => {
         // Remove toast notification for socket errors
       });
 
+      // Handle message send errors
+      newSocket.on('message-error', (error) => {
+        console.error('Message send error:', error);
+      });
+
       setSocket(newSocket);
 
       // Cleanup on unmount

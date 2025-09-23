@@ -36,8 +36,24 @@ export const ChatProvider = ({ children }) => {
       const updated = new Map(prev);
       const existing = updated.get(conversationId) || [];
       
-      // Check if message already exists
-      const messageExists = existing.some(msg => msg.id === messageData.id);
+      // Check if message already exists (by ID or if it's from current user and very recent)
+      const messageExists = existing.some(msg => {
+        // Exact ID match
+        if (msg.id === messageData.id) return true;
+        
+        // For messages from current user, check if it's a duplicate based on content and time
+        if (messageData.sender.id === user?.id && msg.sender.id === user?.id) {
+          const timeDiff = Math.abs(new Date(messageData.createdAt) - new Date(msg.createdAt));
+          const sameContent = msg.originalText === messageData.originalText;
+          // If same content and within 5 seconds, consider it duplicate
+          if (sameContent && timeDiff < 5000) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+      
       if (messageExists) {
         console.log('Message already exists, skipping:', messageData.id);
         return prev; // Return previous state unchanged
@@ -110,15 +126,37 @@ export const ChatProvider = ({ children }) => {
     if (socket && isConnected) {
       // New message received
       const handleNewMessageEvent = (messageData) => {
+        // Skip processing our own messages that come back from server
+        // (they should be handled by message-sent event instead)
+        if (messageData.sender.id === user?.id) {
+          console.log('Skipping own message from new-message event:', messageData.id);
+          return;
+        }
         handleNewMessage(messageData);
       };
 
       // Message sent confirmation
       const handleMessageSentEvent = (data) => {
-        updateMessageStatus(data.id, { 
-          isDelivered: true, 
-          deliveredAt: data.deliveredAt 
-        });
+        console.log('Message sent confirmation:', data);
+        if (data.tempMessageId && data.realMessage) {
+          // Replace optimistic message with real message
+          console.log('Replacing optimistic message:', data.tempMessageId, 'with real message:', data.realMessage.id);
+          replaceOptimisticMessage(data.tempMessageId, data.realMessage);
+        } else if (data.tempMessageId) {
+          // If we have tempMessageId but no realMessage, just update the optimistic message
+          console.log('Updating optimistic message status:', data.tempMessageId);
+          updateOptimisticMessageStatus(data.tempMessageId, {
+            isDelivered: true,
+            deliveredAt: data.deliveredAt,
+            isOptimistic: false
+          });
+        } else {
+          // Fallback: just update status by ID
+          updateMessageStatus(data.id, { 
+            isDelivered: true, 
+            deliveredAt: data.deliveredAt 
+          });
+        }
       };
 
       // Messages read receipt
@@ -126,17 +164,38 @@ export const ChatProvider = ({ children }) => {
         markConversationMessagesAsRead(data.conversationId, data.readBy);
       };
 
+      // Handle message translation updates
+      const handleMessageTranslatedEvent = (messageData) => {
+        setMessages(prev => {
+          const updated = new Map(prev);
+          const conversationId = messageData.conversationId;
+          const existing = updated.get(conversationId) || [];
+          
+          // Find and update the message with translation
+          const updatedMessages = existing.map(msg => 
+            msg.id === messageData.id 
+              ? { ...msg, ...messageData }
+              : msg
+          );
+          
+          updated.set(conversationId, updatedMessages);
+          return updated;
+        });
+      };
+
       socket.on('new-message', handleNewMessageEvent);
       socket.on('message-sent', handleMessageSentEvent);
       socket.on('messages-read', handleMessagesReadEvent);
+      socket.on('message-translated', handleMessageTranslatedEvent);
 
       return () => {
         socket.off('new-message', handleNewMessageEvent);
         socket.off('message-sent', handleMessageSentEvent);
         socket.off('messages-read', handleMessagesReadEvent);
+        socket.off('message-translated', handleMessageTranslatedEvent);
       };
     }
-  }, [socket, isConnected, handleNewMessage]);
+  }, [socket, isConnected, handleNewMessage, user?.id]);
 
   // Load conversations
   const loadConversations = async () => {
@@ -145,7 +204,7 @@ export const ChatProvider = ({ children }) => {
       const response = await axios.get('/messages/conversations');
       setConversations(response.data.conversations);
     } catch (error) {
-      console.error('Failed to load conversations:', error);
+      console.error('Failed to load conversations:', error.response?.data?.message || error.message || error);
       // Remove toast notification for loading errors
     } finally {
       setLoading(false);
@@ -219,28 +278,141 @@ export const ChatProvider = ({ children }) => {
 
   // Send a message
   const sendMessage = async (recipientId, text, messageType = 'text') => {
+    // Create optimistic message for instant UI update
+    const tempMessageId = `temp_${Date.now()}_${Math.random()}`;
+    
     try {
+      // Find existing conversation with this recipient
+      const existingConversation = conversations.find(c => c.participant.id === recipientId);
+      
+      const optimisticMessage = {
+        id: tempMessageId,
+        conversationId: existingConversation?.id || `temp_${recipientId}`,
+        sender: {
+          id: user.id,
+          name: user.name,
+          phone: user.phone,
+          avatar: user.avatar
+        },
+        originalText: text.trim(),
+        displayText: text.trim(),
+        senderLanguage: user.preferredLanguage,
+        recipientLanguage: null,
+        messageType,
+        isTranslated: false,
+        isDelivered: false, // Will be updated when confirmed
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        isOptimistic: true // Flag to identify optimistic messages
+      };
+
+      // Add optimistic message immediately to UI
+      console.log('Adding optimistic message:', tempMessageId);
+      handleNewMessage(optimisticMessage);
+
       const messageData = {
         recipientId,
         text: text.trim(),
-        messageType
+        messageType,
+        tempMessageId, // Include temp ID for matching
+        // Include conversationId if we have an existing conversation
+        ...(existingConversation && !existingConversation.id.startsWith('temp_') && {
+          conversationId: existingConversation.id
+        })
       };
+
+      console.log('Sending message:', messageData);
 
       // Send via socket for real-time delivery
       if (socket && isConnected) {
         socket.emit('send-message', messageData);
+        
+        // Set a timeout to update the message status if no confirmation received
+        setTimeout(() => {
+          updateOptimisticMessageStatus(tempMessageId, {
+            isDelivered: true,
+            isOptimistic: false
+          });
+        }, 3000); // 3 second timeout
       } else {
         // Fallback to HTTP API
+        console.log('Socket not connected, using HTTP API fallback');
         const response = await axios.post('/messages/send', messageData);
-        handleNewMessage(response.data.data);
+        // Replace optimistic message with real one
+        replaceOptimisticMessage(tempMessageId, response.data.data);
       }
 
       return true;
     } catch (error) {
-      console.error('Failed to send message:', error);
-      // Remove toast notification for send errors
+      console.error('Failed to send message:', error.response?.data?.message || error.message || error);
+      // Remove the optimistic message on error
+      removeOptimisticMessage(tempMessageId);
       return false;
     }
+  };
+
+  // Replace optimistic message with real message
+  const replaceOptimisticMessage = (tempMessageId, realMessage) => {
+    console.log('Attempting to replace optimistic message:', tempMessageId);
+    setMessages(prev => {
+      const updated = new Map(prev);
+      let found = false;
+      for (const [conversationId, msgs] of updated.entries()) {
+        const msgIndex = msgs.findIndex(m => m.id === tempMessageId);
+        if (msgIndex >= 0) {
+          console.log('Found optimistic message at index:', msgIndex, 'in conversation:', conversationId);
+          const updatedMsgs = [...msgs];
+          updatedMsgs[msgIndex] = realMessage;
+          updated.set(conversationId, updatedMsgs);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        console.log('Optimistic message not found:', tempMessageId);
+      }
+      return updated;
+    });
+  };
+
+  // Update optimistic message status
+  const updateOptimisticMessageStatus = (tempMessageId, updates) => {
+    console.log('Updating optimistic message status:', tempMessageId, updates);
+    setMessages(prev => {
+      const updated = new Map(prev);
+      let found = false;
+      for (const [conversationId, msgs] of updated.entries()) {
+        const msgIndex = msgs.findIndex(m => m.id === tempMessageId);
+        if (msgIndex >= 0) {
+          const updatedMsgs = [...msgs];
+          updatedMsgs[msgIndex] = { ...updatedMsgs[msgIndex], ...updates };
+          updated.set(conversationId, updatedMsgs);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        console.log('Optimistic message not found for status update:', tempMessageId);
+      }
+      return updated;
+    });
+  };
+
+  // Remove optimistic message (on error)
+  const removeOptimisticMessage = (tempMessageId) => {
+    setMessages(prev => {
+      const updated = new Map(prev);
+      for (const [conversationId, msgs] of updated.entries()) {
+        const msgIndex = msgs.findIndex(m => m.id === tempMessageId);
+        if (msgIndex >= 0) {
+          const updatedMsgs = [...msgs];
+          updatedMsgs.splice(msgIndex, 1);
+          updated.set(conversationId, updatedMsgs);
+          break;
+        }
+      }
+      return updated;
+    });
   };
 
   // Update message status

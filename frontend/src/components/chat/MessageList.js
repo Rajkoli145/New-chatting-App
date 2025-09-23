@@ -94,11 +94,18 @@ const MessageList = ({ messages, currentUserId, participant }) => {
                       {message.displayText || message.translatedText || message.originalText}
                     </p>
                     
-                    {/* Translation indicator - only show if actually translated and different from original */}
-                    {message.isTranslated && !isOwn && message.translatedText && message.translatedText !== message.originalText && (
+                    {/* Translation indicator */}
+                    {!isOwn && message.senderLanguage && (
                       <div className="flex items-center space-x-1 text-xs text-dark-400">
-                        <Globe className="w-3 h-3" />
-                        <span>Translated from {message?.senderLanguage?.toUpperCase() || 'Unknown'}</span>
+                        <Globe className={`w-3 h-3 ${!message.isTranslated && message.senderLanguage !== message.recipientLanguage ? 'animate-spin' : ''}`} />
+                        <span>
+                          {message.isTranslated && message.translatedText !== message.originalText 
+                            ? `Translated from ${message?.senderLanguage?.toUpperCase() || 'Unknown'}`
+                            : message.senderLanguage !== message.recipientLanguage 
+                              ? 'Translating...'
+                              : `In ${message?.senderLanguage?.toUpperCase() || 'Unknown'}`
+                          }
+                        </span>
                       </div>
                     )}
                   </div>
@@ -114,7 +121,9 @@ const MessageList = ({ messages, currentUserId, participant }) => {
                     {/* Message Status for own messages */}
                     {isOwn && (
                       <div className="flex items-center">
-                        {message.isDelivered ? (
+                        {message.isOptimistic ? (
+                          <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                        ) : message.isDelivered ? (
                           message.isRead ? (
                             <CheckCheck className="w-3 h-3 text-blue-400" />
                           ) : (

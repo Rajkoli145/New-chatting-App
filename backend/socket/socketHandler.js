@@ -121,8 +121,10 @@ const socketHandler = (io) => {
 
       // Handle sending messages
       socket.on('send-message', async (data) => {
+        const startTime = Date.now();
         try {
-          const { conversationId, recipientId, text, messageType = 'text' } = data;
+          const { conversationId, recipientId, text, messageType = 'text', tempMessageId } = data;
+          console.log(`📤 Processing message from ${socket.user.name} to ${recipientId}`);
 
           // Verify recipient exists
           const recipient = await User.findById(recipientId);
@@ -152,45 +154,107 @@ const socketHandler = (io) => {
             deliveredAt: new Date()
           });
 
-          await message.save();
-          await message.populate('sender', 'name phone avatar');
+          // Save message and get participants in parallel
+          const [savedMessage, participants] = await Promise.all([
+            message.save().then(msg => msg.populate('sender', 'name phone avatar')),
+            User.find({ 
+              _id: { $in: conversation.participants } 
+            }).select('_id preferredLanguage')
+          ]);
 
-          // Update conversation
-          conversation.lastMessage = message._id;
+          // Update conversation asynchronously (don't wait for it)
+          conversation.lastMessage = savedMessage._id;
           conversation.lastMessageTime = new Date();
-          await conversation.save();
+          conversation.save().catch(err => console.error('Failed to update conversation:', err));
 
-          // Get all participants in the conversation
-          const participants = await User.find({ 
-            _id: { $in: conversation.participants } 
-          }).select('_id preferredLanguage');
+          // First, send the message immediately to all participants with original text
+          // This ensures instant delivery, then we handle translations asynchronously
+          const baseMessageData = {
+            id: message._id,
+            conversationId: message.conversationId,
+            sender: {
+              id: message.sender._id,
+              name: message.sender.name,
+              phone: message.sender.phone,
+              avatar: message.sender.avatar
+            },
+            originalText: message.originalText,
+            senderLanguage: message.senderLanguage,
+            messageType: message.messageType,
+            isDelivered: message.isDelivered,
+            deliveredAt: message.deliveredAt,
+            createdAt: message.createdAt
+          };
 
-          // Send personalized message to each participant
-          for (const participant of participants) {
-            const participantLanguage = participant.preferredLanguage;
-            let displayText = text;
-            let isTranslated = false;
+          // Send immediate message to all participants (except sender)
+          participants.forEach(participant => {
+            // Skip sending to the sender (they get confirmation via message-sent event)
+            if (participant._id.toString() === socket.userId) {
+              return;
+            }
+            
+            const immediateMessageData = {
+              ...baseMessageData,
+              displayText: text, // Show original text first
+              recipientLanguage: participant.preferredLanguage,
+              isTranslated: false,
+              translatedText: null
+            };
+            io.to(`user_${participant._id}`).emit('new-message', immediateMessageData);
+          });
 
-            // Translate if participant's language is different from sender's language
-            if (senderLanguage !== participantLanguage) {
+          // Handle translations asynchronously for participants with different languages (except sender)
+          const translationPromises = participants
+            .filter(participant => 
+              participant.preferredLanguage !== senderLanguage && 
+              participant._id.toString() !== socket.userId
+            )
+            .map(async (participant) => {
               try {
-                displayText = await translationService.translateText(
+                const displayText = await translationService.translateText(
                   text, 
                   senderLanguage, 
-                  participantLanguage
+                  participant.preferredLanguage
                 );
-                // Only mark as translated if the text actually changed
-                isTranslated = displayText !== text;
-                if (isTranslated) {
+                
+                // Only send update if translation is different from original
+                if (displayText !== text) {
+                  const translatedMessageData = {
+                    ...baseMessageData,
+                    displayText: displayText,
+                    recipientLanguage: participant.preferredLanguage,
+                    isTranslated: true,
+                    translatedText: displayText
+                  };
+                  
+                  // Send translated version
+                  io.to(`user_${participant._id}`).emit('message-translated', translatedMessageData);
                   console.log(`Translated message for ${participant._id}: "${text}" -> "${displayText}"`);
                 }
               } catch (translationError) {
-                console.error('Translation failed:', translationError);
-                displayText = text; // Fallback to original text
+                console.error('Translation failed for participant:', participant._id, translationError);
+                // No need to send anything as original message was already sent
               }
-            }
+            });
 
-            const personalizedMessageData = {
+          // Execute all translations in parallel (don't wait for them)
+          Promise.all(translationPromises).catch(error => {
+            console.error('Some translations failed:', error);
+          });
+
+          // Confirm to sender with real message data
+          const processingTime = Date.now() - startTime;
+          console.log(`✅ Message sent in ${processingTime}ms`);
+          console.log('Sending confirmation with tempMessageId:', tempMessageId);
+          
+          socket.emit('message-sent', {
+            id: message._id,
+            tempMessageId, // Include temp ID for frontend to match
+            conversationId: message.conversationId,
+            isDelivered: true,
+            deliveredAt: message.deliveredAt,
+            processingTime,
+            realMessage: {
               id: message._id,
               conversationId: message.conversationId,
               sender: {
@@ -200,32 +264,26 @@ const socketHandler = (io) => {
                 avatar: message.sender.avatar
               },
               originalText: message.originalText,
-              translatedText: isTranslated ? displayText : null,
-              displayText: displayText,
+              displayText: text,
               senderLanguage: message.senderLanguage,
-              recipientLanguage: participantLanguage,
+              recipientLanguage: null,
               messageType: message.messageType,
-              isTranslated: isTranslated,
-              isDelivered: message.isDelivered,
+              isTranslated: false,
+              isDelivered: true,
+              isRead: false,
               deliveredAt: message.deliveredAt,
-              createdAt: message.createdAt
-            };
-
-            // Send to participant's personal room
-            io.to(`user_${participant._id}`).emit('new-message', personalizedMessageData);
-          }
-
-          // Confirm to sender
-          socket.emit('message-sent', {
-            id: message._id,
-            conversationId: message.conversationId,
-            isDelivered: true,
-            deliveredAt: message.deliveredAt
+              createdAt: message.createdAt,
+              isOptimistic: false // Mark as not optimistic
+            }
           });
 
         } catch (error) {
           console.error('Send message error:', error);
-          socket.emit('error', { message: 'Failed to send message' });
+          socket.emit('message-error', { 
+            message: 'Failed to send message',
+            error: error.message,
+            originalData: data
+          });
         }
       });
 
