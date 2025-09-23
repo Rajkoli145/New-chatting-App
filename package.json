@@ -2,14 +2,16 @@
   "name": "cross-lingo-chat",
   "version": "1.0.0",
   "description": "Multilingual real-time chat application with automatic translation",
-  "main": "server/index.js",
+  "main": "backend/index.js",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "cd server && npm run dev",
-    "client": "cd client && npm start",
-    "build": "cd client && npm run build",
-    "start": "cd server && npm start",
-    "install-deps": "npm install && cd server && npm install && cd ../client && npm install"
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm start",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && npm start",
+    "install-deps": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "install-backend": "cd backend && npm install",
+    "install-frontend": "cd frontend && npm install"
   },
   "keywords": ["chat", "multilingual", "translation", "real-time", "socket.io"],
   "author": "Raj Koli",

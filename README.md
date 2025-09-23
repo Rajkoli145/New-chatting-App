@@ -75,19 +75,23 @@ cd New-chatting-App
 # Install root dependencies
 npm install
 
-# Install all dependencies (root, server, client)
+# Install all dependencies (root, backend, frontend)
 npm run install-deps
+
+# Or install individually:
+npm run install-backend   # Install backend dependencies
+npm run install-frontend  # Install frontend dependencies
 ```
 
 ### 3. Environment Setup
 
-#### Server Environment
+#### Backend Environment
 ```bash
-cd server
+cd backend
 cp .env.example .env
 ```
 
-Edit `server/.env`:
+Edit `backend/.env`:
 ```env
 # Database
 MONGODB_URI=mongodb://localhost:27017/cross-lingo-chat
@@ -111,13 +115,13 @@ NODE_ENV=development
 CLIENT_URL=http://localhost:3000
 ```
 
-#### Client Environment
+#### Frontend Environment
 ```bash
-cd client
+cd frontend
 cp .env.example .env
 ```
 
-Edit `client/.env`:
+Edit `frontend/.env`:
 ```env
 REACT_APP_API_URL=http://localhost:5001/api
 REACT_APP_SERVER_URL=http://localhost:5001
@@ -125,12 +129,12 @@ REACT_APP_SERVER_URL=http://localhost:5001
 
 ### 4. Start Development Servers
 ```bash
-# From root directory - starts both server and client
+# From root directory - starts both backend and frontend
 npm run dev
 
 # Or start individually:
-# npm run server  (starts backend on port 5001)
-# npm run client  (starts frontend on port 3000)
+# npm run backend   (starts backend on port 5001)
+# npm run frontend  (starts frontend on port 3000)
 ```
 
 ### 5. Access Application
@@ -294,24 +298,24 @@ The app uses Google's Gemini API for translation with fallback handling:
 ### Running Tests
 ```bash
 # Backend tests
-cd server
+cd backend
 npm test
 
 # Frontend tests
-cd client
+cd frontend
 npm test
 ```
 
 ### Code Structure
 ```
-├── server/                 # Backend application
+├── backend/               # Backend application
 │   ├── models/            # MongoDB models
 │   ├── routes/            # API routes
 │   ├── services/          # Business logic services
 │   ├── middleware/        # Custom middleware
 │   ├── socket/            # Socket.io handlers
 │   └── index.js           # Server entry point
-├── client/                # Frontend application
+├── frontend/              # Frontend application
 │   ├── src/
 │   │   ├── components/    # React components
 │   │   ├── contexts/      # React context providers
@@ -325,17 +329,17 @@ npm test
 ### Development Scripts
 ```bash
 # Root level
-npm run dev          # Start both server and client
-npm run server       # Start backend only
-npm run client       # Start frontend only
-npm run build        # Build client for production
+npm run dev          # Start both backend and frontend
+npm run backend      # Start backend only
+npm run frontend     # Start frontend only
+npm run build        # Build frontend for production
 npm run install-deps # Install all dependencies
 
-# Server level
+# Backend level
 npm start           # Start production server
 npm run dev         # Start development server with nodemon
 
-# Client level
+# Frontend level
 npm start           # Start development server
 npm run build       # Build for production
 npm test            # Run tests
