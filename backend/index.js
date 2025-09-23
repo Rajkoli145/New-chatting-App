@@ -16,6 +16,10 @@ const messageRoutes = require('./routes/messages');
 const socketHandler = require('./socket/socketHandler');
 
 const app = express();
+
+// Trust proxy for Render deployment
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 
 // CORS configuration
@@ -65,11 +69,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // MongoDB connection
-const mongoUri = process.env.MONGODB_URI && process.env.MONGODB_URI.includes('mongodb+srv') 
-  ? 'mongodb://localhost:27017/cross-lingo-chat' // Use local DB if Atlas connection fails
-  : process.env.MONGODB_URI || 'mongodb://localhost:27017/cross-lingo-chat';
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/cross-lingo-chat';
 
-console.log('🔗 Connecting to MongoDB:', mongoUri.replace(/\/\/.*@/, '//***:***@'));
+console.log('🔗 Connecting to MongoDB...');
+console.log('Environment:', process.env.NODE_ENV);
+console.log('MongoDB URI provided:', !!process.env.MONGODB_URI);
 
 mongoose.connect(mongoUri, {
   useNewUrlParser: true,
