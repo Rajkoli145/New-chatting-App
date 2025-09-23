@@ -433,7 +433,7 @@ export const ChatProvider = ({ children }) => {
   };
 
   // Mark conversation messages as read
-  const markConversationMessagesAsRead = (conversationId, readBy) => {
+  const markConversationMessagesAsRead = useCallback((conversationId, readBy) => {
     if (readBy === user?.id) return; // Don't update if current user read the messages
 
     setMessages(prev => {
@@ -449,7 +449,7 @@ export const ChatProvider = ({ children }) => {
       }
       return updated;
     });
-  };
+  }, [user?.id]);
 
   // Start a conversation with a user
   const startConversation = async (userId) => {

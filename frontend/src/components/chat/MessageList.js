@@ -1,17 +1,69 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { formatMessageTime, formatChatDate, shouldShowDateSeparator } from '../../utils/dateUtils';
-import { Check, CheckCheck, Globe } from 'lucide-react';
+import { Check, CheckCheck, Globe, ChevronDown } from 'lucide-react';
 
 const MessageList = ({ messages, currentUserId, participant }) => {
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const lastMessageCountRef = useRef(0);
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
+  // Check if user is near the bottom of the chat
+  const isNearBottom = () => {
+    if (!messagesContainerRef.current) return true;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    const threshold = 100; // pixels from bottom
+    return scrollHeight - scrollTop - clientHeight < threshold;
+  };
+
+  // Handle scroll events to show/hide scroll button
+  const handleScroll = () => {
+    const nearBottom = isNearBottom();
+    setShowScrollButton(!nearBottom);
+  };
+
+  // Scroll to bottom function
+  const scrollToBottom = () => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      setShowScrollButton(false);
+    }
+  };
+
+  // Initial scroll to bottom when messages first load
+  useEffect(() => {
+    if (messages && messages.length > 0 && lastMessageCountRef.current === 0) {
+      setTimeout(() => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+        }
+      }, 100);
     }
   }, [messages]);
+
+  // Auto-scroll logic: only for new messages when user is at bottom or it's their own message
+  useEffect(() => {
+    if (!messages || messages.length === 0) return;
+    
+    const isNewMessage = messages.length > lastMessageCountRef.current;
+    lastMessageCountRef.current = messages.length;
+    
+    if (isNewMessage) {
+      const lastMessage = messages[messages.length - 1];
+      const isOwnMessage = lastMessage?.sender?.id === currentUserId;
+      const userAtBottom = isNearBottom();
+      
+      // Auto-scroll if it's user's own message OR user is already at bottom
+      if (isOwnMessage || userAtBottom) {
+        setTimeout(() => {
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 50);
+      }
+    }
+  }, [messages, currentUserId]);
 
   if (!messages || messages.length === 0) {
     return (
@@ -37,10 +89,13 @@ const MessageList = ({ messages, currentUserId, participant }) => {
   }
 
   return (
-    <div 
-      ref={messagesContainerRef}
-      className="flex-1 overflow-y-auto p-4 space-y-1"
-    >
+    <div className="flex-1 relative overflow-hidden">
+      <div 
+        ref={messagesContainerRef}
+        className="h-full overflow-y-auto p-4 space-y-1 scroll-smooth"
+        onScroll={handleScroll}
+        style={{ maxHeight: '100%' }}
+      >
       {messages.map((message, index) => {
         const isOwn = message.sender.id === currentUserId;
         const previousMessage = index > 0 ? messages[index - 1] : null;
@@ -151,6 +206,21 @@ const MessageList = ({ messages, currentUserId, participant }) => {
       
       {/* Scroll anchor */}
       <div ref={messagesEndRef} />
+      
+      </div>
+      
+      {/* Scroll to bottom button */}
+      {showScrollButton && (
+        <div className="absolute bottom-4 right-4 z-10">
+          <button
+            onClick={scrollToBottom}
+            className="bg-primary-600 hover:bg-primary-700 text-white p-2 rounded-full shadow-lg transition-colors duration-200 flex items-center justify-center"
+            title="Scroll to bottom"
+          >
+            <ChevronDown className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
