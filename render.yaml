@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: cross-lingo-chat-backend
+    runtime: node
+    plan: free
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CLIENT_URL
+        value: https://your-frontend-url.vercel.app
+      - key: CORS_ORIGIN
+        value: https://your-frontend-url.vercel.app
