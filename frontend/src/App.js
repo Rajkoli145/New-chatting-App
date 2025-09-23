@@ -13,7 +13,6 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import OTPVerification from './pages/OTPVerification';
 import Chat from './pages/Chat';
-import LoadingSpinner from './components/LoadingSpinner';
 
 function App() {
   return (

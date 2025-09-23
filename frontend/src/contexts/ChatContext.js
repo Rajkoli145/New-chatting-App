@@ -93,7 +93,7 @@ export const ChatProvider = ({ children }) => {
     if (messageData.sender.id !== user?.id) {
       setUnreadCount(prev => prev + 1);
     }
-  }, [user?.id, activeConversation?.id]);
+  }, [user?.id]);
 
   // Load initial data
   useEffect(() => {

@@ -57,7 +57,7 @@ const ChatWindow = ({ onBackClick, showBackButton = false }) => {
         stopTyping(activeConversation?.id, activeConversation?.participant?.id);
       }
     };
-  }, []);
+  }, [isTyping, activeConversation?.id, activeConversation?.participant?.id, stopTyping]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();

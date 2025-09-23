@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Settings, MessageCircle, Users, X, Plus } from 'lucide-react';
+import { Search, Settings, MessageCircle, Users, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
 import { useSocket } from '../../contexts/SocketContext';

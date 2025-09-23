@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import toast from 'react-hot-toast';
 
 const SocketContext = createContext();
 
@@ -177,7 +176,7 @@ export const SocketProvider = ({ children }) => {
   // Get typing users in a conversation
   const getTypingUsers = (conversationId) => {
     const typing = [];
-    for (const [key, data] of typingUsers.entries()) {
+    for (const [, data] of typingUsers.entries()) {
       if (data.conversationId === conversationId) {
         typing.push(data);
       }

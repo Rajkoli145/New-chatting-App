@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wifi, WifiOff } from 'lucide-react';
+import { WifiOff } from 'lucide-react';
 
 const ConnectionStatus = ({ isConnected }) => {
   if (isConnected) {
