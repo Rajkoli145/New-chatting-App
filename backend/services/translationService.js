@@ -5,7 +5,7 @@ class TranslationService {
     this.isAvailable = !!process.env.GEMINI_API_KEY;
     this.requestCount = 0;
     this.lastResetTime = Date.now();
-    this.maxRequestsPerMinute = 12; // Stay under the 15/minute limit
+    this.maxRequestsPerMinute = 50; // Increased limit for better user experience
     
     // Language code mappings
     this.languageNames = {
@@ -54,11 +54,27 @@ class TranslationService {
     
     // Reset counter every minute
     if (timeSinceReset >= 60000) {
+      if (this.requestCount > 0) {
+        console.log(`🔄 Rate limit reset. Previous minute: ${this.requestCount} requests`);
+      }
       this.requestCount = 0;
       this.lastResetTime = now;
     }
     
-    return this.requestCount < this.maxRequestsPerMinute;
+    const canMake = this.requestCount < this.maxRequestsPerMinute;
+    if (!canMake) {
+      const timeUntilReset = Math.ceil((60000 - timeSinceReset) / 1000);
+      console.log(`⏱️ Rate limit reached (${this.requestCount}/${this.maxRequestsPerMinute}). Reset in ${timeUntilReset}s`);
+    }
+    
+    return canMake;
+  }
+
+  // Manual reset for debugging
+  resetRateLimit() {
+    this.requestCount = 0;
+    this.lastResetTime = Date.now();
+    console.log('🔄 Rate limit manually reset');
   }
 
   async translateText(text, fromLanguage, toLanguage) {
